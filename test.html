@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>UCHIHA CLAN</title>
+  <!-- Link to the external CSS file -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="loading">
+  <div id="section-overlay" class="section-overlay"></div>
+
+  <div class="loader-container">
+    <div class="loader-content">
+      <div class="loader-text-top">UCHIHA</div>
+      <div class="loader"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Mangekyou_Sharingan_Sasuke.svg/1200px-Mangekyou_Sharingan_Sasuke.svg.png" alt="Mangekyou Sharingan" class="sharingan-img"/></div>
+      <div class="loader-text-bottom">CLAN</div>
+    </div>
+  </div>
+
+  <div class="back-to-top" id="backToTop">↑</div>
+
+  <div class="page-wrapper">
+    <section id="home" class="hero">
+      <div class="void-background">
+        <div class="fog"></div>
+        <div class="blood-veins"></div>
+        <!-- Particles will be injected here by JS -->
+      </div>
+
+      <div class="home-view-content">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Mangekyou_Sharingan_Sasuke.svg/1200px-Mangekyou_Sharingan_Sasuke.svg.png" alt="Mangekyou Sharingan" class="uchiha-emblem"/>
+        <h1>UCHIHA CLAN</h1>
+        <a href="https://osu.ppy.sh/teams/5629" target="_blank" rel="noopener noreferrer" class="join-now-button">JOIN US</a>
+        <nav class="quick-links">
+          <a id="show-skins-settings">Skin & Settings</a> |
+          <a id="show-members">Members</a>
+        </nav>
+      </div>
+
+      <div id="iframe-view-content">
+          <div class="iframe-header">
+              <h2>EDDIE RATH</h2>
+          </div>
+          <div class="iframe-container">
+              <iframe
+                  src="https://www.youtube.com/embed/9Dd4aftgpWI?si=T7iKmFb9ubOGgaK4"
+                  title="Uchiha Clan Theme Song"
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerpolicy="strict-origin-when-cross-origin"
+                  allowfullscreen>
+              </iframe>
+          </div>
+      </div>
+
+      <button class="nav-arrow right-arrow" id="go-to-iframe-arrow" aria-label="Next Page">›</button>
+      <button class="nav-arrow left-arrow" id="go-home-arrow" aria-label="Previous Page" style="opacity: 0; pointer-events: none;">‹</button>
+
+    </section>
+  </div>
+
+  <section id="skins-settings" class="skins-settings">
+    <div class="container">
+      <h2 class="section-title">Skin & Settings</h2>
+      <div class="settings-grid">
+        <div class="setting-card">
+          <h3 class="glow">eldrejko</h3>
+          <p class="skin-link">Skin: <a href="https://osu.ppy.sh/community/forums/topics/986201?n=1" target="_blank" rel="noopener noreferrer">https://osu.ppy.sh/community/forums/topics/986201?n=1</a></p>
+          <div class="button-group">
+            <div class="button-particle-container"><button id="btn-osu" class="active-tab">Osu! Settings</button><div class="button-particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div></div>
+            <div class="button-particle-container"><button id="btn-tablet">Tablet Settings</button><div class="button-particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div></div>
+          </div>
+          <div class="detail-content active" id="osu-settings">
+            <table class="settings-table">
+              <tbody>
+                <tr>
+                  <td><strong>Resolution:</strong> 1920x1080</td>
+                  <td><strong>Frame limiter:</strong> Unlimited</td>
+                  <td><strong>Cursor Size:</strong> 0.52x</td>
+                  <td><strong>Background Dim:</strong> 100%</td>
+                </tr>
+                <tr>
+                  <td><strong>Score Meter Size:</strong> 1.66x</td>
+                  <td><strong>Effect Volume:</strong> 100%</td>
+                  <td><strong>Key Overlay:</strong> No</td>
+                  <td><strong>Hit Lighting:</strong> No</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="detail-content" id="tablet-settings">
+            <div class="images-wrapper"><img src="https://i.postimg.cc/Qxd5MYQF/Screenshot-2025-05-09-070218.png" class="zoomable" alt="eldrejko setting 1"><img src="https://i.postimg.cc/4xnSp5gd/Screenshot-2025-05-09-071532.png" class="zoomable" alt="eldrejko setting 2"><img src="https://i.postimg.cc/7ht881JQ/Screenshot-2025-05-09-090511.png" class="zoomable" alt="eldrejko setting 3"></div>
+          </div>
+        </div>
+        <!-- Add more setting cards here if needed -->
+      </div>
+    </div>
+  </section>
+
+  <div class="lightbox-overlay" id="lightbox"><img src="" alt="Zoomed image" id="lightbox-img" /></div>
+
+  <section id="members" class="members">
+    <div class="container">
+      <h2 class="section-title">Members</h2>
+      <div id="members-loader">Loading team members…</div>
+      <div class="members-grid" style="display:none">
+          <!-- Member cards will be injected here by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Link to the external JavaScript file (defer recommended) -->
+  <script src="script.js" defer></script>
+</body>
+</html>
