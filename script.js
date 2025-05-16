@@ -15,15 +15,13 @@ window.addEventListener('load', () => {
 
 const PROXY_CONFIGS = [
   { type: 'param_encoded', base: 'https://api.allorigins.win/raw?url=' },
-  { type: 'param_encoded', base: 'https://corsproxy.io/?' }, // Actually 'https://corsproxy.io/?ENCODED_URL'
-  { type: 'append_unencoded', base: 'https://thingproxy.freeboard.io/fetch/' },
+  { type: 'param_encoded', base: 'https://corsproxy.io/?' }, // Example: https://corsproxy.io/?ENCODED_URL
+  { type: 'append_unencoded', base: 'https://thingproxy.freeboard.io/fetch/' }, // Example: https://thingproxy.freeboard.io/fetch/UNENCODED_URL
   { type: 'param_encoded', base: 'https://cors-bypass.haines.workers.dev/?url=' },
   { type: 'param_encoded', base: 'https://api.codetabs.com/v1/proxy/?quest=' },
-  // Add more here with their type and base URL
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
-  // ... (all your existing setup code up to the call to tryProxiesAndFetch is the same)
   const skinsSection = document.getElementById('skins-settings');
   const membersSection = document.getElementById('members');
   const showSkinsBtn = document.getElementById('show-skins-settings');
@@ -256,19 +254,20 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleRandomBlink(); 
   }
 
+
   handleBackToTop();
   
   const TEAM_OSU_URL = 'https://osu.ppy.sh/teams/5629';
   
-  tryProxiesAndFetch(TEAM_OSU_URL, PROXY_CONFIGS) // Pass PROXY_CONFIGS array
+  tryProxiesAndFetch(TEAM_OSU_URL, PROXY_CONFIGS)
     .then(data => {
       const loader = document.getElementById('members-loader');
+      const grid = document.querySelector('.members-grid'); // Define grid here for fallback
       if (data && data.html && data.successfulProxyConfig) {
-        loadTeamMembers(data.html, data.successfulProxyConfig); // Pass HTML and the successful proxy config object
+        loadTeamMembers(data.html, data.successfulProxyConfig);
       } else {
         if (loader) loader.textContent = "Failed to fetch team page using all available proxies.";
         console.error("Failed to fetch team page with any proxy.");
-        const grid = document.querySelector('.members-grid');
         const fallbackMembersData = [
           { id: 123, username: 'FallbackPlayer1', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'US', is_online: false },
           { id: 456, username: 'FallbackPlayer2', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'JP', is_online: true }
@@ -278,9 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     .catch(err => {
         const loader = document.getElementById('members-loader');
+        const grid = document.querySelector('.members-grid'); // Define grid here for fallback
         console.error("Error in initial team page fetch attempt:", err);
         if (loader) loader.textContent = "Error fetching team page. Check console.";
-        const grid = document.querySelector('.members-grid');
         const fallbackMembersData = [
             { id: 123, username: 'FallbackPlayer1', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'US', is_online: false },
             { id: 456, username: 'FallbackPlayer2', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'JP', is_online: true }
@@ -294,7 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabletSettingsDiv = document.getElementById('tablet-settings');
   const btnOsu = document.getElementById('btn-osu');
   const btnTablet = document.getElementById('btn-tablet');
-  // ... (rest of your DOMContentLoaded settings logic is unchanged) ...
   if (btnOsu && btnTablet && osuSettingsDiv && tabletSettingsDiv) {
     btnOsu.addEventListener('click', () => {
       if (!osuSettingsDiv.classList.contains('active')) {
@@ -363,24 +361,21 @@ function initializeVoidParticles() {
 
 function constructProxiedUrl(targetUrl, proxyConfig) {
     if (proxyConfig.type === 'param_encoded') {
-        // For proxies like allorigins, corsproxy.io (if it uses `?ENCODED_URL`), codetabs
         return `${proxyConfig.base}${encodeURIComponent(targetUrl)}`;
     } else if (proxyConfig.type === 'append_unencoded') {
-        // For proxies like thingproxy, cors-anywhere
         return `${proxyConfig.base}${targetUrl}`;
     }
-    // Default or unknown type - assume param_encoded for safety
     console.warn(`Unknown proxy type for ${proxyConfig.base}, defaulting to param_encoded.`);
     return `${proxyConfig.base}${encodeURIComponent(targetUrl)}`;
 }
 
 
-async function tryProxiesAndFetch(targetUrl, proxyConfigs, isJson = false) { // Now accepts proxyConfigs array
+async function tryProxiesAndFetch(targetUrl, proxyConfigs, isJson = false) {
   for (const config of proxyConfigs) {
     const fullProxyUrl = constructProxiedUrl(targetUrl, config);
     
     console.log(`Trying proxy: ${config.base} (type: ${config.type}) for target: ${targetUrl}`);
-    console.log(`Full constructed URL: ${fullProxyUrl}`);
+    // console.log(`Full constructed URL: ${fullProxyUrl}`); // Optional: for deeper debugging
 
     try {
       const controller = new AbortController();
@@ -393,10 +388,10 @@ async function tryProxiesAndFetch(targetUrl, proxyConfigs, isJson = false) { // 
         console.log(`Success with proxy: ${config.base} for target: ${targetUrl}`);
         if (isJson) {
           const jsonData = await response.json();
-          return { data: jsonData, successfulProxyConfig: config }; // Return config object
+          return { data: jsonData, successfulProxyConfig: config };
         } else {
           const htmlData = await response.text();
-          return { html: htmlData, successfulProxyConfig: config }; // Return config object
+          return { html: htmlData, successfulProxyConfig: config };
         }
       } else {
         console.warn(`Proxy ${config.base} returned status: ${response.status} for ${targetUrl}`);
@@ -413,12 +408,15 @@ async function tryProxiesAndFetch(targetUrl, proxyConfigs, isJson = false) { // 
   return null;
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-async function fetchUserRank(userId, successfulProxyConfig) { // Accepts a proxy config object
+async function fetchUserRank(userId, successfulProxyConfig, maxRetries = 2, attempt = 1) {
     const userProfileUrl = `https://osu.ppy.sh/users/${userId}`;
     const proxiedUserProfileUrl = constructProxiedUrl(userProfileUrl, successfulProxyConfig);
 
-    console.log(`Fetching rank for user ${userId} via ${successfulProxyConfig.base} with URL: ${proxiedUserProfileUrl}`);
+    // console.log(`Fetching rank for user ${userId} (Attempt ${attempt}/${maxRetries + 1}) via ${successfulProxyConfig.base}`);
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -427,9 +425,15 @@ async function fetchUserRank(userId, successfulProxyConfig) { // Accepts a proxy
         clearTimeout(timeoutId);
 
         if (!res.ok) {
-            // Log the actual status code from the proxy/target
-            console.error(`Failed to fetch profile for user ${userId} via ${successfulProxyConfig.base}. Status: ${res.status} ${res.statusText}. URL: ${proxiedUserProfileUrl}`);
-            return null;
+            console.error(`Attempt ${attempt}: Failed to fetch profile for user ${userId} via ${successfulProxyConfig.base}. Status: ${res.status} ${res.statusText}. URL: ${proxiedUserProfileUrl}`);
+            // Retry on general network/proxy failures (indicated by status code >= 500 or specific error types below)
+            // or if the status is 0 (often indicates a CORS issue or blocked request not properly handled by proxy)
+            if ((res.status >= 500 || res.status === 0 || res.status === 404) && attempt <= maxRetries) { // Added 404 for retry due to proxy flakiness
+                console.log(`Retrying for user ${userId} in ${attempt * 1500}ms... (Status: ${res.status})`);
+                await delay(attempt * 1500); // Slightly increasing delay
+                return fetchUserRank(userId, successfulProxyConfig, maxRetries, attempt + 1);
+            }
+            return null; 
         }
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -443,19 +447,23 @@ async function fetchUserRank(userId, successfulProxyConfig) { // Accepts a proxy
                     const rank = profileData?.user?.statistics?.global_rank; 
                     if (rank && typeof rank === 'number' && rank > 0) {
                         return `#${rank.toLocaleString()}`;
+                    } else if (profileData?.user?.statistics?.global_rank === null || profileData?.user?.statistics?.global_rank === 0) {
+                        console.log(`User ${userId} is unranked based on profile data (rank: ${profileData?.user?.statistics?.global_rank}).`);
+                        return 'N/A';
                     }
                 } catch (e) {
                     console.error(`Error parsing data-initial-data for user ${userId}:`, e);
                 }
             }
         }
-        console.warn(`Could not extract rank for user ${userId} from their profile page's data-initial-data (via ${successfulProxyConfig.base}).`);
-        return null;
+        console.warn(`Attempt ${attempt}: Could not extract rank for user ${userId} from profile page data (via ${successfulProxyConfig.base}).`);
+        return 'N/A'; 
     } catch (err) {
-      if (err.name === 'AbortError') {
-        console.error(`Timeout fetching rank for user ${userId} via ${successfulProxyConfig.base}:`, err.message);
-      } else {
-        console.error(`Error fetching rank for user ${userId} via ${successfulProxyConfig.base}:`, err.message);
+      console.error(`Attempt ${attempt}: Error fetching rank for user ${userId} via ${successfulProxyConfig.base}:`, err.message);
+      if (attempt <= maxRetries) {
+          console.log(`Retrying for user ${userId} in ${attempt * 1500}ms due to fetch error...`);
+          await delay(attempt * 1500);
+          return fetchUserRank(userId, successfulProxyConfig, maxRetries, attempt + 1);
       }
       return null;
     }
@@ -464,7 +472,6 @@ async function fetchUserRank(userId, successfulProxyConfig) { // Accepts a proxy
 async function loadTeamMembers(teamPageHtml, successfulProxyConfigForUserProfiles) { 
   const grid = document.querySelector('.members-grid');
   const loader = document.getElementById('members-loader');
-  // defaultAvatar and fallbackMembersData moved to displayFallbackMembers for central handling
 
   if (!grid || !loader) { return; }
 
@@ -475,7 +482,8 @@ async function loadTeamMembers(teamPageHtml, successfulProxyConfigForUserProfile
     if (!wrappers.length) throw new Error('No members found in provided team page HTML.');
 
     const memberPromises = [];
-    grid.innerHTML = ''; // Clear grid before adding cards
+    grid.innerHTML = '';
+
 
     wrappers.forEach((el, index) => {
       const dataAttr = el.getAttribute('data-user');
@@ -492,7 +500,7 @@ async function loadTeamMembers(teamPageHtml, successfulProxyConfigForUserProfile
       const { id, username, avatar_url, country_code, is_online } = data; 
       if (!id || !username) return;
       
-      const defaultAvatar = 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha'; // define locally if not global
+      const defaultAvatar = 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha';
       const validAvatar = (avatar_url && typeof avatar_url === 'string' && avatar_url.trim() !== '' && avatar_url !== 'https://assets.ppy.sh/images/layout/avatar-guest.png') ? avatar_url : defaultAvatar;
       
       const flagUrl = country_code ? `https://osu.ppy.sh/images/flags/${country_code.toUpperCase()}.png` : '';
@@ -546,8 +554,14 @@ async function loadTeamMembers(teamPageHtml, successfulProxyConfigForUserProfile
             const { id, rank } = result.value;
             const rankSpan = grid.querySelector(`.member-rank-placeholder-${id}`);
             if (rankSpan) {
-                rankSpan.textContent = `Global Rank: ${rank || 'N/A'}`;
+                rankSpan.textContent = `Global Rank: ${rank || 'N/A'}`; // Default to N/A if rank is null from fetchUserRank
             }
+        } else if (result.status === 'rejected') {
+             // Error should have been logged by fetchUserRank or its promise wrapper.
+             // Find the card by ID and update its placeholder to N/A if it's still "Fetching..."
+             // For simplicity, we assume if it was rejected, the rank would remain "Fetching..." or already be set to N/A.
+             // More robustly, you could extract the ID from the rejection if possible and update the specific card.
+             console.error("A rank fetch promise was rejected:", result.reason);
         }
     });
 
