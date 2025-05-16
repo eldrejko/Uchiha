@@ -13,7 +13,17 @@ window.addEventListener('load', () => {
   }, 3500);
 });
 
+const PROXY_CONFIGS = [
+  { type: 'param_encoded', base: 'https://api.allorigins.win/raw?url=' },
+  { type: 'param_encoded', base: 'https://corsproxy.io/?' }, // Actually 'https://corsproxy.io/?ENCODED_URL'
+  { type: 'append_unencoded', base: 'https://thingproxy.freeboard.io/fetch/' },
+  { type: 'param_encoded', base: 'https://cors-bypass.haines.workers.dev/?url=' },
+  { type: 'param_encoded', base: 'https://api.codetabs.com/v1/proxy/?quest=' },
+  // Add more here with their type and base URL
+];
+
 document.addEventListener('DOMContentLoaded', () => {
+  // ... (all your existing setup code up to the call to tryProxiesAndFetch is the same)
   const skinsSection = document.getElementById('skins-settings');
   const membersSection = document.getElementById('members');
   const showSkinsBtn = document.getElementById('show-skins-settings');
@@ -246,12 +256,37 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleRandomBlink(); 
   }
 
-
   handleBackToTop();
-  const PROXY_BASE_URL = 'https://api.allorigins.win/raw?url='; 
+  
   const TEAM_OSU_URL = 'https://osu.ppy.sh/teams/5629';
   
-  loadTeamMembers(`${PROXY_BASE_URL}${encodeURIComponent(TEAM_OSU_URL)}`, PROXY_BASE_URL);
+  tryProxiesAndFetch(TEAM_OSU_URL, PROXY_CONFIGS) // Pass PROXY_CONFIGS array
+    .then(data => {
+      const loader = document.getElementById('members-loader');
+      if (data && data.html && data.successfulProxyConfig) {
+        loadTeamMembers(data.html, data.successfulProxyConfig); // Pass HTML and the successful proxy config object
+      } else {
+        if (loader) loader.textContent = "Failed to fetch team page using all available proxies.";
+        console.error("Failed to fetch team page with any proxy.");
+        const grid = document.querySelector('.members-grid');
+        const fallbackMembersData = [
+          { id: 123, username: 'FallbackPlayer1', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'US', is_online: false },
+          { id: 456, username: 'FallbackPlayer2', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'JP', is_online: true }
+        ];
+        displayFallbackMembers(grid, loader, fallbackMembersData);
+      }
+    })
+    .catch(err => {
+        const loader = document.getElementById('members-loader');
+        console.error("Error in initial team page fetch attempt:", err);
+        if (loader) loader.textContent = "Error fetching team page. Check console.";
+        const grid = document.querySelector('.members-grid');
+        const fallbackMembersData = [
+            { id: 123, username: 'FallbackPlayer1', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'US', is_online: false },
+            { id: 456, username: 'FallbackPlayer2', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'JP', is_online: true }
+        ];
+        displayFallbackMembers(grid, loader, fallbackMembersData);
+    });
 
   initializeVoidParticles();
 
@@ -259,6 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabletSettingsDiv = document.getElementById('tablet-settings');
   const btnOsu = document.getElementById('btn-osu');
   const btnTablet = document.getElementById('btn-tablet');
+  // ... (rest of your DOMContentLoaded settings logic is unchanged) ...
   if (btnOsu && btnTablet && osuSettingsDiv && tabletSettingsDiv) {
     btnOsu.addEventListener('click', () => {
       if (!osuSettingsDiv.classList.contains('active')) {
@@ -325,12 +361,74 @@ function initializeVoidParticles() {
     }, regenerationInterval);
 }
 
-async function fetchUserRank(userId, proxyForIndividualUserPages) {
-    const userProfileUrl = `https://osu.ppy.sh/users/${userId}`;
+function constructProxiedUrl(targetUrl, proxyConfig) {
+    if (proxyConfig.type === 'param_encoded') {
+        // For proxies like allorigins, corsproxy.io (if it uses `?ENCODED_URL`), codetabs
+        return `${proxyConfig.base}${encodeURIComponent(targetUrl)}`;
+    } else if (proxyConfig.type === 'append_unencoded') {
+        // For proxies like thingproxy, cors-anywhere
+        return `${proxyConfig.base}${targetUrl}`;
+    }
+    // Default or unknown type - assume param_encoded for safety
+    console.warn(`Unknown proxy type for ${proxyConfig.base}, defaulting to param_encoded.`);
+    return `${proxyConfig.base}${encodeURIComponent(targetUrl)}`;
+}
+
+
+async function tryProxiesAndFetch(targetUrl, proxyConfigs, isJson = false) { // Now accepts proxyConfigs array
+  for (const config of proxyConfigs) {
+    const fullProxyUrl = constructProxiedUrl(targetUrl, config);
+    
+    console.log(`Trying proxy: ${config.base} (type: ${config.type}) for target: ${targetUrl}`);
+    console.log(`Full constructed URL: ${fullProxyUrl}`);
+
     try {
-        const res = await fetch(`${proxyForIndividualUserPages}${encodeURIComponent(userProfileUrl)}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const response = await fetch(fullProxyUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        console.log(`Success with proxy: ${config.base} for target: ${targetUrl}`);
+        if (isJson) {
+          const jsonData = await response.json();
+          return { data: jsonData, successfulProxyConfig: config }; // Return config object
+        } else {
+          const htmlData = await response.text();
+          return { html: htmlData, successfulProxyConfig: config }; // Return config object
+        }
+      } else {
+        console.warn(`Proxy ${config.base} returned status: ${response.status} for ${targetUrl}`);
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.warn(`Proxy ${config.base} timed out for ${targetUrl}`);
+      } else {
+        console.warn(`Proxy ${config.base} fetch failed for ${targetUrl} with error:`, error.message);
+      }
+    }
+  }
+  console.error(`All proxies failed for target: ${targetUrl}`);
+  return null;
+}
+
+
+async function fetchUserRank(userId, successfulProxyConfig) { // Accepts a proxy config object
+    const userProfileUrl = `https://osu.ppy.sh/users/${userId}`;
+    const proxiedUserProfileUrl = constructProxiedUrl(userProfileUrl, successfulProxyConfig);
+
+    console.log(`Fetching rank for user ${userId} via ${successfulProxyConfig.base} with URL: ${proxiedUserProfileUrl}`);
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        const res = await fetch(proxiedUserProfileUrl, {signal: controller.signal});
+        clearTimeout(timeoutId);
+
         if (!res.ok) {
-            console.error(`Failed to fetch profile for user ${userId}: ${res.status}`);
+            // Log the actual status code from the proxy/target
+            console.error(`Failed to fetch profile for user ${userId} via ${successfulProxyConfig.base}. Status: ${res.status} ${res.statusText}. URL: ${proxiedUserProfileUrl}`);
             return null;
         }
         const html = await res.text();
@@ -351,45 +449,33 @@ async function fetchUserRank(userId, proxyForIndividualUserPages) {
                 }
             }
         }
-        console.warn(`Could not extract rank for user ${userId} from their profile page's data-initial-data.`);
+        console.warn(`Could not extract rank for user ${userId} from their profile page's data-initial-data (via ${successfulProxyConfig.base}).`);
         return null;
     } catch (err) {
-        console.error(`Error fetching rank for user ${userId}:`, err);
-        return null;
+      if (err.name === 'AbortError') {
+        console.error(`Timeout fetching rank for user ${userId} via ${successfulProxyConfig.base}:`, err.message);
+      } else {
+        console.error(`Error fetching rank for user ${userId} via ${successfulProxyConfig.base}:`, err.message);
+      }
+      return null;
     }
 }
 
-async function loadTeamMembers(teamPageFullUrl, proxyBaseUrl) { 
+async function loadTeamMembers(teamPageHtml, successfulProxyConfigForUserProfiles) { 
   const grid = document.querySelector('.members-grid');
   const loader = document.getElementById('members-loader');
-  const defaultAvatar = 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha';
-  const fallbackMembersData = [ // Added some dummy data for fallback demonstration
-    { id: 123, username: 'FallbackPlayer1', avatar_url: defaultAvatar, country_code: 'US' },
-    { id: 456, username: 'FallbackPlayer2', avatar_url: defaultAvatar, country_code: 'JP' }
-  ];
+  // defaultAvatar and fallbackMembersData moved to displayFallbackMembers for central handling
 
-  if (!grid || !loader) {
-      console.error("Members grid or loader not found.");
-      if (loader) loader.textContent = "Error: Page elements missing for members display.";
-      return;
-  }
+  if (!grid || !loader) { return; }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); 
-
-    const res = await fetch(teamPageFullUrl, { signal: controller.signal }); 
-    clearTimeout(timeoutId);
-
-    if (!res.ok) throw new Error(`HTTP error fetching team page! Status: ${res.status}`);
-
-    const html = await res.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const doc = new DOMParser().parseFromString(teamPageHtml, 'text/html');
     const wrappers = doc.querySelectorAll('.js-react--user-card');
 
-    if (!wrappers.length) throw new Error('No members found — .js-react--user-card selector may be outdated or not present.');
+    if (!wrappers.length) throw new Error('No members found in provided team page HTML.');
 
     const memberPromises = [];
+    grid.innerHTML = ''; // Clear grid before adding cards
 
     wrappers.forEach((el, index) => {
       const dataAttr = el.getAttribute('data-user');
@@ -403,16 +489,20 @@ async function loadTeamMembers(teamPageFullUrl, proxyBaseUrl) {
         return;
       }
 
-      const { id, username, avatar_url, country_code } = data; 
+      const { id, username, avatar_url, country_code, is_online } = data; 
       if (!id || !username) return;
       
+      const defaultAvatar = 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha'; // define locally if not global
       const validAvatar = (avatar_url && typeof avatar_url === 'string' && avatar_url.trim() !== '' && avatar_url !== 'https://assets.ppy.sh/images/layout/avatar-guest.png') ? avatar_url : defaultAvatar;
       
       const flagUrl = country_code ? `https://osu.ppy.sh/images/flags/${country_code.toUpperCase()}.png` : '';
-      const flagImgHtml = country_code ? `<img src="${flagUrl}" alt="${country_code}" class="member-flag" title="${country_code}">` : '';
+      const flagImgHtml = country_code ? `<img src="${flagUrl}" alt="${country_code.toUpperCase()}" class="member-flag" title="${country_code.toUpperCase()}">` : '';
 
       const card = document.createElement('div');
       card.className = 'member-card';
+      if (is_online) { 
+          card.classList.add('member-online');
+      }
       card.style.setProperty('--index', index);
       card.innerHTML = `
         <a href="https://osu.ppy.sh/users/${id}" target="_blank" rel="noopener noreferrer">
@@ -428,46 +518,24 @@ async function loadTeamMembers(teamPageFullUrl, proxyBaseUrl) {
       grid.appendChild(card);
 
       memberPromises.push(
-          fetchUserRank(id, proxyBaseUrl) 
+          fetchUserRank(id, successfulProxyConfigForUserProfiles) 
             .then(rank => ({ id, rank }))
             .catch(err => {
-                console.error(`Failed to get rank for user ${id}:`, err);
                 return {id, rank: 'N/A'}; 
             })
       );
     });
     
     if (memberPromises.length > 0) {
-        loader.style.display = 'none';
-        grid.style.display = 'grid';
+        if (loader) loader.style.display = 'none';
+        if (grid) grid.style.display = 'grid';
     } else {
-        loader.textContent = 'No member data could be initially processed from the team page.';
-        grid.innerHTML = ''; // Clear grid if no members found to process initially
-        // Display fallback if primary fetch path led to no members for promises
-        if (fallbackMembersData.length > 0 && grid) { // Check grid exists
-            fallbackMembersData.forEach((member, index) => {
-                const fallbackCard = document.createElement('div');
-                fallbackCard.className = 'member-card';
-                fallbackCard.style.setProperty('--index', index);
-                const fallbackFlagUrl = member.country_code ? `https://osu.ppy.sh/images/flags/${member.country_code.toUpperCase()}.png` : '';
-                const fallbackFlagImgHtml = member.country_code ? `<img src="${fallbackFlagUrl}" alt="${member.country_code}" class="member-flag" title="${member.country_code}">` : '';
-    
-                fallbackCard.innerHTML = `
-                    <a href="https://osu.ppy.sh/users/${member.id}" target="_blank" rel="noopener noreferrer">
-                        <img src="${member.avatar_url}" alt="${member.username}" class="member-img">
-                    </a>
-                    <div class="member-info">
-                        <h3>${member.username}</h3>
-                        <p class="member-details">
-                            ${fallbackFlagImgHtml}
-                            <span>Global Rank: N/A</span>
-                        </p>
-                    </div>`;
-                grid.appendChild(fallbackCard);
-            });
-            if (loader) loader.style.display = 'none'; // Hide loader if showing fallback
-            grid.style.display = 'grid'; // Ensure grid is visible for fallbacks
-        }
+        if(loader) loader.textContent = 'No member data could be parsed from the team page.';
+        const fallbackData = [
+          { id: 123, username: 'FallbackPlayer1', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'US', is_online: false },
+          { id: 456, username: 'FallbackPlayer2', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'JP', is_online: true }
+        ];
+        displayFallbackMembers(grid, loader, fallbackData); 
         return; 
     }
 
@@ -484,36 +552,51 @@ async function loadTeamMembers(teamPageFullUrl, proxyBaseUrl) {
     });
 
   } catch (err) {
-    console.error('Error loading team members:', err.message);
-    loader.textContent = `Failed to load members. ${err.name === 'AbortError' ? 'Request timed out.' : err.message}.`;
-    grid.innerHTML = ''; 
-    if (fallbackMembersData.length > 0 && grid) { // Check grid exists for fallback display
-        fallbackMembersData.forEach((member, index) => {
-            const fallbackCard = document.createElement('div');
-            fallbackCard.className = 'member-card';
-            fallbackCard.style.setProperty('--index', index);
-            const fallbackFlagUrl = member.country_code ? `https://osu.ppy.sh/images/flags/${member.country_code.toUpperCase()}.png` : '';
-            const fallbackFlagImgHtml = member.country_code ? `<img src="${fallbackFlagUrl}" alt="${member.country_code}" class="member-flag" title="${member.country_code}">` : '';
+    console.error('Error processing team members from fetched HTML:', err.message);
+    if(loader) loader.textContent = `Error processing members. ${err.message}.`;
+    const fallbackData = [
+        { id: 123, username: 'FallbackPlayer1', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'US', is_online: false },
+        { id: 456, username: 'FallbackPlayer2', avatar_url: 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha', country_code: 'JP', is_online: true }
+    ];
+    displayFallbackMembers(grid, loader, fallbackData);
+  }
+}
 
-            fallbackCard.innerHTML = `
+function displayFallbackMembers(grid, loader, fallbackData) {
+    if (!grid) return;
+    grid.innerHTML = ''; 
+    const defaultAvatar = 'https://via.placeholder.com/200/000000/FFFFFF/?text=Uchiha';
+
+    if (fallbackData && fallbackData.length > 0) {
+        fallbackData.forEach((member, index) => {
+            const card = document.createElement('div');
+            card.className = 'member-card';
+            if (member.is_online) {
+                card.classList.add('member-online');
+            }
+            card.style.setProperty('--index', index);
+            const flagUrl = member.country_code ? `https://osu.ppy.sh/images/flags/${member.country_code.toUpperCase()}.png` : '';
+            const flagImgHtml = member.country_code ? `<img src="${flagUrl}" alt="${member.country_code.toUpperCase()}" class="member-flag" title="${member.country_code.toUpperCase()}">` : '';
+
+            card.innerHTML = `
                 <a href="https://osu.ppy.sh/users/${member.id}" target="_blank" rel="noopener noreferrer">
-                    <img src="${member.avatar_url}" alt="${member.username}" class="member-img">
+                    <img src="${member.avatar_url || defaultAvatar}" alt="${member.username}" class="member-img" onerror="this.onerror=null;this.src='${defaultAvatar}';">
                 </a>
                 <div class="member-info">
                     <h3>${member.username}</h3>
                     <p class="member-details">
-                        ${fallbackFlagImgHtml}
+                        ${flagImgHtml}
                         <span>Global Rank: N/A</span>
                     </p>
                 </div>`;
-            grid.appendChild(fallbackCard);
+            grid.appendChild(card);
         });
-        if(loader) loader.style.display = 'none';
+        if (loader) loader.style.display = 'none';
         grid.style.display = 'grid';
     } else {
-        if (grid) grid.style.display = 'none';
+        if (loader) loader.textContent = 'No members to display and no fallback available.';
+        grid.style.display = 'none';
     }
-  }
 }
 
 
